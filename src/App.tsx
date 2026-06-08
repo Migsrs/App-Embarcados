@@ -1,4 +1,4 @@
-import { HashRouter, NavLink, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, NavLink, Route, Routes } from 'react-router-dom';
 import { Home as HomeIcon, Map, Settings, Moon, Sun, Shield, BarChart2 } from 'lucide-react';
 import { AppProvider, useAppState } from './state/appState';
 import Home from './screens/Home';
@@ -77,9 +77,9 @@ function AppRoutes() {
 export default function App() {
   return (
     <AppProvider>
-      <HashRouter>
+      <BrowserRouter>
         <AppRoutes />
-      </HashRouter>
+      </BrowserRouter>
     </AppProvider>
   );
 }
