@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import {
   DoorOpen,
-  Tv2,
-  UtensilsCrossed,
-  Bed,
-  Car,
+  AppWindow,
+  ScanLine,
+  Radar,
+  Waves,
   CheckCircle2,
   XCircle,
   MinusCircle,
@@ -15,7 +15,7 @@ import { ZONES } from '../models/types';
 import PinModal from '../widgets/PinModal';
 import ConfirmModal from '../widgets/ConfirmModal';
 
-const ZONE_ICONS: LucideIcon[] = [DoorOpen, Tv2, UtensilsCrossed, Bed, Car];
+const ZONE_ICONS: LucideIcon[] = [DoorOpen, AppWindow, ScanLine, Radar, Waves];
 
 type ZoneFlow = { zone: number; step: 'pin' | 'confirm' } | null;
 

@@ -14,6 +14,20 @@ A comunicação segue o fluxo:
 
 O app nunca fala direto com o FPGA. Ele envia comandos e recebe status através do broker MQTT.
 
+## Zonas e Sensores
+
+O perímetro é monitorado por 5 zonas, cada uma associada a um sensor diferente conectado à central FPGA (mínimo de 4 tipos de sensor exigido pelo projeto):
+
+| Zona | Local             | Sensor                          |
+| ---- | ----------------- | -------------------------------- |
+| Z1   | Porta Principal    | Reed Switch                      |
+| Z2   | Porta dos Fundos   | Reed Switch                      |
+| Z3   | Corredor           | Sensor Laser de Obstáculo (IR direcional) |
+| Z4   | Sala               | Sensor Laser de Proximidade (ToF) |
+| Z5   | Garagem            | Sensor Ultrassônico (HC-SR04)    |
+
+A FPGA envia o estado e o bitmask de zonas violadas (bit 0 = Z1 ... bit 4 = Z5) ao ESP32, que repassa via MQTT no tópico `status` (`zonas_violadas` e `zonas_ativas`).
+
 ## Funcionalidades implementadas
 
 - Armar / desarmar a central

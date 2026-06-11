@@ -30,11 +30,11 @@ export interface AppConfig extends MqttConfig {
 }
 
 export const ZONES = [
-  { id: 1, code: 'Z1', name: 'Entrada', sensors: ['Reed', 'PIR'] },
-  { id: 2, code: 'Z2', name: 'Sala', sensors: ['HC-SR04', 'IR'] },
-  { id: 3, code: 'Z3', name: 'Cozinha', sensors: ['VL53L0X', 'PIR'] },
-  { id: 4, code: 'Z4', name: 'Quarto', sensors: ['IR', 'Reed'] },
-  { id: 5, code: 'Z5', name: 'Garagem', sensors: ['HC-SR04', 'VL53L0X'] },
+  { id: 1, code: 'Z1', name: 'Porta Principal', sensors: ['Reed Switch'] },
+  { id: 2, code: 'Z2', name: 'Porta dos Fundos', sensors: ['Reed Switch'] },
+  { id: 3, code: 'Z3', name: 'Corredor', sensors: ['Sensor Laser de Obstáculo'] },
+  { id: 4, code: 'Z4', name: 'Sala', sensors: ['Sensor Laser de Proximidade'] },
+  { id: 5, code: 'Z5', name: 'Garagem', sensors: ['Sensor Ultrassônico (HC-SR04)'] },
 ];
 
 export const stateLabels: Record<AlarmStateCode, { label: string; color: string }> = {
