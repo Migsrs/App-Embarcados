@@ -133,23 +133,25 @@ void publishLightState() {
 
 void onMqttMessage(char* topic, byte* payload, unsigned int length) {
   String message;
-  for (unsigned int i = 0; i < length; i++) {
-    message += (char)payload[i];
-  }
+  for (unsigned int i = 0; i < length; i++) message += (char)payload[i];
+  Serial.print("MQTT recebido [");
+  Serial.print(topic);
+  Serial.print("]: ");
+  Serial.println(message);          // <-- mostra o que chegou
+
   String t = String(topic);
-  if (t.endsWith("/cmd")) {
-    handleCommand(message);
-  } else if (t.endsWith("/luzes")) {
-    handleLight(message);
-  }
+  if (t.endsWith("/cmd")) handleCommand(message);
+  else if (t.endsWith("/luzes")) handleLight(message);
 }
 
 void handleCommand(const String& payload) {
   if (payload.indexOf("\"acao\":\"armar\"") >= 0) {
     fpgaSerial.write('A');
+    Serial.println(">> Enviei 'A' (armar) para o FPGA");   // <-- confirma o envio na UART
   } else if (payload.indexOf("\"acao\":\"desarmar\"") >= 0) {
     fpgaSerial.write('D');
     for (int i = 0; i < 5; i++) zoneMask[i] = true;
+    Serial.println(">> Enviei 'D' (desarmar) para o FPGA");
   } else if (payload.indexOf("\"acao\":\"bypass\"") >= 0) {
     int pos = payload.indexOf("\"zona\":");
     if (pos >= 0) {
@@ -157,6 +159,7 @@ void handleCommand(const String& payload) {
       if (zona >= 1 && zona <= 5) {
         fpgaSerial.write('a' + (zona - 1));
         zoneMask[zona - 1] = !zoneMask[zona - 1];
+        Serial.printf(">> Enviei bypass zona %d para o FPGA\n", zona);
       }
     }
   }
