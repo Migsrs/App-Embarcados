@@ -73,19 +73,130 @@ WiFiClientSecure net;
 PubSubClient mqtt(net);
 unsigned long lastReconnectAttempt = 0;
 
+bool zoneMask[5] = { true, true, true, true, true };
+bool lastAlertPublished = false;
+unsigned long lastStatusPublish = 0;
+byte ultimoEstado = 255;
+
+// ---- prototipos (evita erro de ordem de declaracao) ----
+void publishAlert(bool zonasVioladas[5]);
+void publishLightState();
+void handleCommand(const String& payload);
+void handleLight(const String& payload);
+
 // =================================================================
 // FUNÇÕES MQTT 
 // =================================================================
+void publishStatus(int estado, uint8_t zonasVioladasMask) {
+  bool zonasVioladas[5];
+  for (int i = 0; i < 5; i++) {
+    zonasVioladas[i] = (zonasVioladasMask >> i) & 0x1;
+  }
+
+  String json = "{";
+  json += "\"estado\":" + String(estado) + ",";
+  json += "\"armado\":" + String(estado != 0 ? "true" : "false") + ",";
+  json += "\"zonas_violadas\":[";
+  for (int i = 0; i < 5; i++) {
+    json += zonasVioladas[i] ? "true" : "false";
+    if (i < 4) json += ",";
+  }
+  json += "],";
+  json += "\"zonas_ativas\":[";
+  for (int i = 0; i < 5; i++) {
+    json += zoneMask[i] ? "true" : "false";
+    if (i < 4) json += ",";
+  }
+  json += "],";
+  json += "\"segundos\":0,";
+  json += "\"ts\":" + String(millis() / 1000);
+  json += "}";
+
+  String topic = String(TOPIC_PREFIX) + "/status";
+  mqtt.publish(topic.c_str(), json.c_str(), true);
+
+  if (estado == 4 && !lastAlertPublished) {
+    publishAlert(zonasVioladas);
+    lastAlertPublished = true;
+  }
+  if (estado != 4) {
+    lastAlertPublished = false;
+  }
+}
+
+void publishAlert(bool zonasVioladas[5]) {
+  String json = "{";
+  json += "\"evento\":\"invasao\",";
+  json += "\"zonas\": [";
+  for (int i = 0; i < 5; i++) {
+    json += zonasVioladas[i] ? "true" : "false";
+    if (i < 4) json += ",";
+  }
+  json += "],";
+  json += "\"ts\":" + String(millis() / 1000);
+  json += "}";
+  String topic = String(TOPIC_PREFIX) + "/alerta";
+  mqtt.publish(topic.c_str(), json.c_str(), false);
+}
+
+void publishLightState() {
+  bool ligada = (digitalRead(RELAY_PIN) == (RELAY_ACTIVE_HIGH ? HIGH : LOW));
+  String json = String("{\"ligada\":") + (ligada ? "true" : "false") + "}";
+  mqtt.publish((String(TOPIC_PREFIX) + "/luzes/estado").c_str(), json.c_str(), true);
+}
+
 void onMqttMessage(char* topic, byte* payload, unsigned int length) {
-  // Processamento de comandos vindos do MQTT (se houver)
+  String message;
+  for (unsigned int i = 0; i < length; i++) message += (char)payload[i];
+  Serial.print("MQTT recebido [");
+  Serial.print(topic);
+  Serial.print("]: ");
+  Serial.println(message);          // <-- mostra o que chegou
+
+  String t = String(topic);
+  if (t.endsWith("/cmd")) handleCommand(message);
+  else if (t.endsWith("/luzes")) handleLight(message);
+}
+
+void handleCommand(const String& payload) {
+  if (payload.indexOf("\"acao\":\"armar\"") >= 0) {
+    FPGA.write('A');
+    Serial.println(">> Enviei 'A' (armar) para o FPGA");   // <-- confirma o envio na UART
+  } else if (payload.indexOf("\"acao\":\"desarmar\"") >= 0) {
+    FPGA.write('D');
+    for (int i = 0; i < 5; i++) zoneMask[i] = true;
+    Serial.println(">> Enviei 'D' (desarmar) para o FPGA");
+  } else if (payload.indexOf("\"acao\":\"bypass\"") >= 0) {
+    int pos = payload.indexOf("\"zona\":");
+    if (pos >= 0) {
+      int zona = payload.substring(pos + 7).toInt();
+      if (zona >= 1 && zona <= 5) {
+        FPGA.write('a' + (zona - 1));
+        zoneMask[zona - 1] = !zoneMask[zona - 1];
+        Serial.printf(">> Enviei bypass zona %d para o FPGA\n", zona);
+      }
+    }
+  }
+}
+
+void handleLight(const String& payload) {
+  if (payload.indexOf("\"acao\":\"apagar\"") >= 0) {
+    digitalWrite(RELAY_PIN, RELAY_ACTIVE_HIGH ? LOW : HIGH);
+  } else if (payload.indexOf("\"acao\":\"acender\"") >= 0) {
+    digitalWrite(RELAY_PIN, RELAY_ACTIVE_HIGH ? HIGH : LOW);
+  } else if (payload.indexOf("\"acao\":\"toggle\"") >= 0) {
+    digitalWrite(RELAY_PIN, !digitalRead(RELAY_PIN));
+  }
+  publishLightState();
 }
 
 void connectMqtt() {
   Serial.print("Conectando ao MQTT...");
   if (mqtt.connect(MQTT_CLIENT_ID, MQTT_USER, MQTT_PASSWORD)) {
     Serial.println(" OK!");
-    String cmdTopic = String(TOPIC_PREFIX) + "/comando";
-    mqtt.subscribe(cmdTopic.c_str());
+    mqtt.subscribe((String(TOPIC_PREFIX) + "/cmd").c_str(), 1);
+    mqtt.subscribe((String(TOPIC_PREFIX) + "/luzes").c_str(), 1);
+    publishLightState();
   } else {
     Serial.print(" Falhou, rc=");
     Serial.println(mqtt.state());
@@ -97,15 +208,15 @@ void connectMqtt() {
 // =================================================================
 bool onPowerState(const String &deviceId, bool &state) {
   Serial.printf("Comando de Voz Recebido! Estado solicitado: %s\n", state ? "LIGAR (Armar)" : "DESLIGAR (Desarmar)");
-  
+
   if (state) {
     // Comando: "Alexa, liga o alarme"
-    FPGA.write(0x41); // Envia 'A' (Armar) para a FPGA via UART
+    handleCommand("{\"acao\":\"armar\"}");
   } else {
     // Comando: "Alexa, desliga o alarme"
-    FPGA.write(0x44); // Envia 'D' (Desarmar) para a FPGA via UART
+    handleCommand("{\"acao\":\"desarmar\"}");
   }
-  
+
   return true; 
 }
 
@@ -171,32 +282,28 @@ void loop() {
   }
 
   // ---- Recebe frames do FPGA (0xAA estado zonas checksum) ----
-  // CORREÇÃO: Utilizando a variável FPGA
   while (FPGA.available() >= 4) {
     if (FPGA.peek() != 0xAA) {
       FPGA.read();
       continue;
     }
-    
-    byte buf[4];
-    FPGA.readBytes(buf, 4);
-    
-    byte st = buf[1];
-    byte zn = buf[2];
-    byte ck = buf[3];
-    
-    if (ck == (0xAA ^ st ^ zn)) {
-      if ((st & 0x07) == 0b100) {
-         digitalWrite(RELAY_PIN, RELAY_ACTIVE_HIGH);
-         FPGA.write(0x55); // Envia ACK
-         
-         if (mqtt.connected()) {
-             String topicAlarme = String(TOPIC_PREFIX) + "/alarme";
-             mqtt.publish(topicAlarme.c_str(), "{\"alerta\":\"INTRUSAO DETECTADA\"}");
-         }
-      } else {
-         digitalWrite(RELAY_PIN, !RELAY_ACTIVE_HIGH);
-      }
+    byte buffer[4];
+    FPGA.readBytes(buffer, 4);
+    if (buffer[0] != 0xAA) continue;
+
+    byte estado    = buffer[1];
+    byte zonasMask = buffer[2];
+    byte checksum  = buffer[3];
+    if ((byte)(0xAA ^ estado ^ zonasMask) != checksum) {
+      continue;
+    }
+
+    FPGA.write(0x55);   // ACK p/ watchdog do FPGA
+    bool estadoMudou = (estado != ultimoEstado);
+    if (estadoMudou || millis() - lastStatusPublish > 500) {
+      publishStatus(estado, zonasMask);
+      lastStatusPublish = millis();
+      ultimoEstado = estado;
     }
   }
 }
