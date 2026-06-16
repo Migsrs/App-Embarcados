@@ -7,7 +7,7 @@ const char* WIFI_SSID     = "Galaxy A716727";
 const char* WIFI_PASSWORD = "ozca4877";
 
 // HiveMQ Cloud (TLS). Troque MQTT_HOST pelo SEU cluster URL.
-const char* MQTT_HOST     = "ce42bc3ef863430ea5f1ea87d8b15069.s1.eu.hivemq.cloud";  // <-- seu cluster
+const char* MQTT_HOST     = "0cc860d4d96843a892abee19c4fbef27.s1.eu.hivemq.cloud";  // <-- seu cluster
 const uint16_t MQTT_PORT  = 8883;                                // TLS
 const char* MQTT_USER     = "Miguel";
 const char* MQTT_PASSWORD = "142536Mb";
@@ -66,6 +66,7 @@ bool zoneMask[5] = { true, true, true, true, true };
 bool lastAlertPublished = false;
 unsigned long lastStatusPublish = 0;
 unsigned long lastReconnectAttempt = 0;
+byte ultimoEstado = 255;
 
 // ---- prototipos (evita erro de ordem de declaracao) ----
 void publishAlert(bool zonasVioladas[5]);
@@ -257,9 +258,11 @@ void loop() {
     }
 
     fpgaSerial.write(0x55);   // ACK p/ watchdog do FPGA
-    if (millis() - lastStatusPublish > 500) {
-      publishStatus(estado, zonasMask);
-      lastStatusPublish = millis();
-    }
+    bool estadoMudou = (estado != ultimoEstado);
+    if (estadoMudou || millis() - lastStatusPublish > 500) {
+    publishStatus(estado, zonasMask);
+    lastStatusPublish = millis();
+    ultimoEstado = estado;
+}
   }
 }
