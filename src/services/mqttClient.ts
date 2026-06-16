@@ -34,7 +34,7 @@ export class MqttBridge {
     const brokerUrl = `${protocol}://${this.config.host}:${this.config.wsPort}${path}`;
 
     const options: IClientOptions = {
-      clientId: this.config.clientId || `alarme-web-${Math.random().toString(16).slice(2)}`,
+      clientId: `alarme-web-${Math.random().toString(16).slice(2)}`,
       username: this.config.username || undefined,
       password: this.config.password || undefined,
       reconnectPeriod: 2000,
