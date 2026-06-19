@@ -5,7 +5,12 @@
 // --- Bibliotecas Sinric Pro ---
 #include <SinricPro.h>
 #include <SinricProSwitch.h>
+#include <Wire.h>
+#include <VL53L0X.h>
 
+VL53L0X vl53;
+const int VL53_LIMIAR_MM = 300;   // 30 cm
+const int VL53_PIN_OUT   = 25;   // GPIO25 -> JA4 da Basys3
 // ===================== CONFIG =====================
 const char* WIFI_SSID     = "Galaxy A716727";
 const char* WIFI_PASSWORD = "ozca4877";
@@ -259,7 +264,18 @@ void setup() {
   net.setCACert(ISRG_ROOT_X1); 
   mqtt.setServer(MQTT_HOST, MQTT_PORT);
   mqtt.setCallback(onMqttMessage);
-  
+   // VL53L0X modo continuo
+  pinMode(VL53_PIN_OUT, OUTPUT);
+  digitalWrite(VL53_PIN_OUT, LOW);
+
+  Wire.begin(21, 22);
+  if (vl53.init()) {
+    vl53.setTimeout(200);
+    vl53.startContinuous(50);   // leitura a cada 50ms
+    Serial.println("VL53L0X OK");
+  } else {
+    Serial.println("VL53L0X nao encontrado!");
+  }
   setupSinricPro();
 }
 
@@ -280,7 +296,19 @@ void loop() {
   } else {
     mqtt.loop();
   }
-
+// VL53L0X leitura continua
+  static unsigned long ultimaLeituraVL = 0;
+  if (millis() - ultimaLeituraVL > 50) {
+    ultimaLeituraVL = millis();
+    int dist = vl53.readRangeContinuousMillimeters();
+    
+    if (!vl53.timeoutOccurred()) {
+      digitalWrite(VL53_PIN_OUT, dist < VL53_LIMIAR_MM ? HIGH : LOW);
+      Serial.print("VL53L0X distancia: ");   // ← adicionar essa linha
+      Serial.print(dist);                     // ← e essa
+      Serial.println(" mm");                  // ← e essa
+    }
+  }
   // ---- Recebe frames do FPGA (0xAA estado zonas checksum) ----
   while (FPGA.available() >= 4) {
     if (FPGA.peek() != 0xAA) {
